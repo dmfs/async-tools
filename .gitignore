@@ -1,0 +1,19 @@
+# compiled java files
+*.class
+
+# temporary files
+*~
+
+# local settings
+.settings/
+
+# binaries
+bin/
+
+# exported files
+jars/
+
+#imported libs
+libs/
+
+gen/
