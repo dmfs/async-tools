@@ -20,6 +20,9 @@ package org.dmfs.asynctools.android;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ExecutionException;
 
+import android.app.Activity;
+import android.app.Fragment;
+import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
 
@@ -29,14 +32,56 @@ import android.util.Log;
  * {@link #join(Runnable, AsyncTask...)} like this:
  * 
  * <pre>
- * 			JoinAsyncTask.join(new Runnable()
- * 			{
- * 				{@literal @}Override
- * 				public void run()
- * 				{
- * 					// do whatever you want to do when all AsyncTasks have finished.
- * 				}
- * 			}, asyncTask1, asyncTask2, asyncTask3);
+ * 	private final OnJoinAsyncTasksCallback onJoinTasks = new OnJoinAsyncTasksCallback()
+ * 	{
+ * 		{@literal @}Override
+ * 		public void onJoinAsyncTasks(int id)
+ * 		{
+ * 			// do whatever you want to do when all AsyncTasks have finished.
+ * 		}
+ * 	};
+ * 
+ * 
+ * 	...
+ * 
+ * 	private void someMethod()
+ * 	{
+ * 		...
+ * 		JoinAsyncTask.join(onJoinTasks, asyncTask1, asyncTask2, asyncTask3);
+ * 		...
+ * 	}
+ * </pre>
+ * 
+ * This executes the calls the callback once <code>asyncTask1</code>, <code>asyncTask2</code> and <code>asyncTask3</code> have finished.
+ * <p>
+ * <strong>Note:</strong> You need to ensure that you keep a reference to the callback, otherwise it might get garbage collected and not executed.
+ * <code>JoinAsyncTask</code> only stores a {@link WeakReference} of the callback to avoid {@link Context} leaks. To be sure, just let your {@link Activity} or
+ * {@link Fragment} implement {@link OnJoinAsyncTasksCallback} and pass it as callback. See below for an example:
+ * </p>
+ * 
+ * <pre>
+ * public class SomeActivity extends Activity implements OnJoinAsyncTasksCallback
+ * {
+ * 
+ * 	...
+ * 
+ * 	{@literal @}Override
+ * 	public void onJoinAsyncTasks(int id)
+ * 	{
+ * 		// do whatever you want to do when all AsyncTasks have finished.
+ * 	}
+ * 
+ * 	...
+ * 
+ * 	private void someMethod()
+ * 	{
+ * 		...
+ * 		JoinAsyncTask.join(this, 1, asyncTask1, asyncTask2, asyncTask3);
+ * 		...
+ * 	}
+ * 
+ * };
+ * 
  * </pre>
  * 
  * @author Marten Gajda <marten@dmfs.org>
@@ -45,33 +90,72 @@ public class JoinAsyncTask extends AsyncTask<AsyncTask<?, ?, ?>, Void, Boolean>
 {
 	private final static String TAG = "JoinAsyncTask";
 
-	private final WeakReference<Runnable> mCallback;
+	/**
+	 * A callback that is called when all {@link AsyncTask}s have finished.
+	 */
+	public interface OnJoinAsyncTasksCallback
+	{
+		/**
+		 * Called when all {@link AsyncTask} have finished.
+		 * 
+		 * @param id
+		 *            The id passed to {@link JoinAsyncTask#join(OnJoinAsyncTasksCallback, int, AsyncTask...)} or
+		 *            {@link JoinAsyncTask#JoinAsyncTask(OnJoinAsyncTasksCallback, int)} or <code>0</code> if called via
+		 *            {@link JoinAsyncTask#join(OnJoinAsyncTasksCallback, AsyncTask...)}.
+		 */
+		public void onJoinAsyncTasks(int id);
+	}
+
+	private final WeakReference<OnJoinAsyncTasksCallback> mCallback;
+
+	private final int mId;
 
 
 	/**
-	 * Waits for all given {@link AsyncTask}s to complete and executes the given {@link Runnable}.
+	 * Waits for all given {@link AsyncTask}s to complete and calls the given {@link OnJoinAsyncTasksCallback}.
 	 * 
 	 * @param callback
-	 *            The {@link Runnable} to execute when all {@link AsyncTask}s have finished.
+	 *            The {@link OnJoinAsyncTasksCallback} to call when all {@link AsyncTask}s have finished. You need to ensure you still hold a reference to the
+	 *            callback, otherwise it might not get executed.
 	 * @param asyncTasks
-	 *            The {@link AsyncTask} to join.
+	 *            The {@link AsyncTask}s to join.
+	 * @param id
+	 *            An identifier that is passed to the callback.
 	 */
-	public static void join(Runnable callback, AsyncTask<?, ?, ?>... asyncTasks)
+	public static void join(OnJoinAsyncTasksCallback callback, int id, AsyncTask<?, ?, ?>... asyncTasks)
 	{
-		new JoinAsyncTask(callback).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, asyncTasks);
+		new JoinAsyncTask(callback, id).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, asyncTasks);
+	}
+
+
+	/**
+	 * Waits for all given {@link AsyncTask}s to complete and calls the given {@link OnJoinAsyncTasksCallback}.
+	 * 
+	 * @param callback
+	 *            The {@link OnJoinAsyncTasksCallback} to call when all {@link AsyncTask}s have finished. You need to ensure you still hold a reference to the
+	 *            callback, otherwise it might not get executed.
+	 * @param asyncTasks
+	 *            The {@link AsyncTask}s to join.
+	 */
+	public static void join(OnJoinAsyncTasksCallback callback, AsyncTask<?, ?, ?>... asyncTasks)
+	{
+		join(callback, 0, asyncTasks);
 	}
 
 
 	/**
 	 * Creates an {@link AsyncTask} that joins other {@link AsyncTask}s and calls the given callback once all the other {@link AsyncTask}s have completed. The
-	 * callback will be executed in the main tread.
+	 * callback method will be executed in the main tread.
 	 * 
 	 * @param callback
-	 *            The callback to execute when all AsyncTasks are completed.
+	 *            The callback to call when all AsyncTasks are completed.
+	 * @param id
+	 *            An identifier that is passed to the callback.
 	 */
-	public JoinAsyncTask(Runnable callback)
+	public JoinAsyncTask(OnJoinAsyncTasksCallback callback, int id)
 	{
-		mCallback = new WeakReference<Runnable>(callback);
+		mCallback = new WeakReference<OnJoinAsyncTasksCallback>(callback);
+		mId = id;
 	}
 
 
@@ -103,10 +187,10 @@ public class JoinAsyncTask extends AsyncTask<AsyncTask<?, ?, ?>, Void, Boolean>
 	@Override
 	protected void onPostExecute(Boolean result)
 	{
-		Runnable callback = mCallback.get();
+		OnJoinAsyncTasksCallback callback = mCallback.get();
 		if (callback != null)
 		{
-			callback.run();
+			callback.onJoinAsyncTasks(mId);
 		}
 	}
 

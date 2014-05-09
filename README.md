@@ -17,16 +17,49 @@ AsyncTasks in Android can be used to execute short-running jobs in the backgroun
 
 `JoinAsyncTasks` provides a convenient way to do this like so:
 
-		JoinAsyncTask.join(new Runnable()
+		private final OnJoinAsyncTasksCallback onJoinTasks = new OnJoinAsyncTasksCallback()
 		{
 			@Override
-			public void run()
+			public void onJoinAsyncTasks(int id)
 			{
 				// do whatever you want to do when all AsyncTasks have finished.
 			}
-		}, asyncTask1, asyncTask2, asyncTask3);
+		};
 
-This executes the given `Runnable` once `asyncTask1`, `asyncTask2` and `asyncTask3` have finished.
+		...
+
+		private void someMethod()
+		{
+			...
+			JoinAsyncTask.join(onJoinTasks, asyncTask1, asyncTask2, asyncTask3);
+			...
+		}
+
+This executes the calls the callback once `asyncTask1`, `asyncTask2` and `asyncTask3` have finished.
+
+**Note:** You need to ensure that you keep a reference to the callback, otherwise it might get garbage collected and not executed. `JoinAsyncTask` only stores a `WeakReference` of the callback to avoid Context leaks. To be sure, just let your Activity or Fragment implement `OnJoinAsyncTasksCallback` and pass it as callback. See below for an example:
+
+		public class SomeActivity extends Activity implements OnJoinAsyncTasksCallback
+		{
+
+			...
+
+			@Override
+			public void onJoinAsyncTasks(int id)
+			{
+				// do whatever you want to do when all AsyncTasks have finished.
+			}
+
+			...
+
+			private void someMethod()
+			{
+				...
+				JoinAsyncTask.join(this, 1, asyncTask1, asyncTask2, asyncTask3);
+				...
+			}
+		};
+
 
 ## License
 
