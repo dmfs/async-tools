@@ -24,6 +24,7 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.os.AsyncTask;
+import android.os.Build.VERSION;
 import android.util.Log;
 
 
@@ -124,7 +125,14 @@ public class JoinAsyncTask extends AsyncTask<AsyncTask<?, ?, ?>, Void, Boolean>
 	 */
 	public static void join(OnJoinAsyncTasksCallback callback, int id, AsyncTask<?, ?, ?>... asyncTasks)
 	{
-		new JoinAsyncTask(callback, id).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, asyncTasks);
+		if (VERSION.SDK_INT >= 11)
+		{
+			new JoinAsyncTask(callback, id).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, asyncTasks);
+		}
+		else
+		{
+			new JoinAsyncTask(callback, id).execute(asyncTasks);
+		}
 	}
 
 
